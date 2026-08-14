@@ -568,13 +568,13 @@
 
   function pollGithub() {
     if (document.hidden || dirty || syncing || !hasGithubRepo()) return;
-    const interval = github.token ? 15000 : 60000;
+    const interval = github.token ? 5000 : 60000;
     if (Date.now() - lastPollAt < interval) return;
     lastPollAt = Date.now();
     loadData();
   }
 
-  setInterval(pollGithub, 15000);
+  setInterval(pollGithub, 5000);
 
   render();
   if (dirty && github.token) syncGithub();
