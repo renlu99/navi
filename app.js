@@ -3,6 +3,8 @@
 
   const DATA_URL = './shortcuts.json';
   const STORAGE_KEY = 'chrome-like-shortcuts-static-v1';
+  const GITHUB_CONFIG_KEY = 'navi-github-config-v1';
+  const GITHUB_API = 'https://api.github.com';
   const maxItems = 1000;
   const grid = document.querySelector('#shortcutGrid');
   const dialog = document.querySelector('#shortcutDialog');
@@ -16,10 +18,25 @@
   const cardMenu = document.querySelector('#cardMenu');
   const toast = document.querySelector('#toast');
   const dataStatus = document.querySelector('#dataStatus');
+  const githubDialog = document.querySelector('#githubDialog');
+  const githubForm = document.querySelector('#githubForm');
+  const githubButton = document.querySelector('#githubButton');
+  const closeGithubDialogButton = document.querySelector('#closeGithubDialogButton');
+  const cancelGithubDialogButton = document.querySelector('#cancelGithubDialogButton');
+  const clearGithubButton = document.querySelector('#clearGithubButton');
+  const githubOwnerInput = document.querySelector('#githubOwnerInput');
+  const githubRepoInput = document.querySelector('#githubRepoInput');
+  const githubBranchInput = document.querySelector('#githubBranchInput');
+  const githubPathInput = document.querySelector('#githubPathInput');
+  const githubTokenInput = document.querySelector('#githubTokenInput');
+  const githubError = document.querySelector('#githubError');
   let cached = readCache();
   let items = cached.items;
   let revision = cached.revision;
   let dirty = cached.dirty;
+  let github = readGithubConfig();
+  let remoteSha = '';
+  let syncing = false;
   let activeMenuId = '';
   let moveModeId = '';
   let draggedId = '';
@@ -39,6 +56,95 @@
     } catch {
       return { items: [], revision: 0, dirty: false };
     }
+  }
+
+  function readGithubConfig() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(GITHUB_CONFIG_KEY) || '{}'); } catch { /* 使用默认配置 */ }
+    const pathParts = location.pathname.split('/').filter(Boolean);
+    const inferredOwner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : '';
+    const inferredRepo = location.hostname.endsWith('.github.io') ? (pathParts[0] || '') : '';
+    return {
+      owner: String(saved.owner || inferredOwner).trim(),
+      repo: String(saved.repo || inferredRepo).trim(),
+      branch: String(saved.branch || 'main').trim(),
+      path: String(saved.path || 'shortcuts.json').trim(),
+      token: String(saved.token || '').trim(),
+    };
+  }
+
+  function hasGithubRepo() { return Boolean(github.owner && github.repo && github.branch && github.path); }
+
+  function githubFileUrl() {
+    return `${GITHUB_API}/repos/${encodeURIComponent(github.owner)}/${encodeURIComponent(github.repo)}/contents/${github.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(github.branch)}`;
+  }
+
+  function githubHeaders() {
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+    if (github.token) headers.Authorization = `Bearer ${github.token}`;
+    return headers;
+  }
+
+  function encodeBase64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+    return btoa(binary);
+  }
+
+  function decodeBase64(value) {
+    const binary = atob(String(value).replace(/\s/g, ''));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  async function githubResponse(url, options = {}) {
+    const response = await fetch(url, { ...options, headers: { ...githubHeaders(), ...(options.headers || {}) } });
+    let payload = null;
+    try { payload = await response.json(); } catch { /* 非 JSON 响应 */ }
+    if (!response.ok) {
+      const message = payload?.message || `GitHub API ${response.status}`;
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  }
+
+  async function readGithubFile() {
+    if (!hasGithubRepo()) throw new Error('请先配置 GitHub 仓库');
+    const payload = await githubResponse(githubFileUrl());
+    if (payload.type !== 'file' || !payload.content) throw new Error('GitHub 文件不是普通 JSON 文件');
+    let document;
+    try { document = JSON.parse(decodeBase64(payload.content)); } catch { throw new Error('GitHub 上的 shortcuts.json 格式不正确'); }
+    return {
+      sha: payload.sha,
+      revision: Number(Array.isArray(document) ? 0 : document.revision || 0),
+      items: normalizeItems(Array.isArray(document) ? document : document.items),
+    };
+  }
+
+  function githubPayload() {
+    return { revision, updatedAt: new Date().toISOString(), items };
+  }
+
+  async function writeGithubFile() {
+    const latest = await readGithubFile();
+    const body = {
+      message: `更新快捷方式 ${new Date().toISOString().slice(0, 10)}`,
+      content: encodeBase64(`${JSON.stringify(githubPayload(), null, 2)}\n`),
+      sha: latest.sha,
+      branch: github.branch,
+    };
+    const payload = await githubResponse(githubFileUrl().split('?')[0], {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    remoteSha = payload.content?.sha || latest.sha;
   }
 
   function normalizeItems(source) {
@@ -121,14 +227,31 @@
 
   function updateStatus(message = '') {
     if (!dataStatus) return;
-    dataStatus.textContent = message || (dirty
-      ? '本机有未导出的修改 · 请点击“导出”更新 shortcuts.json'
-      : '数据来自 shortcuts.json · 编辑仅保存到当前浏览器');
-    dataStatus.classList.toggle('pending', dirty);
+    dataStatus.textContent = message || (syncing
+      ? '正在同步到 GitHub…'
+      : dirty
+        ? (github.token ? '本机有未同步修改 · 正在写回 GitHub' : '本机有未同步修改 · 请配置 GitHub Token')
+        : (hasGithubRepo() ? `数据来自 GitHub · ${github.owner}/${github.repo}/${github.path}` : '数据来自 shortcuts.json · 编辑仅保存到当前浏览器'));
+    dataStatus.classList.toggle('pending', dirty || syncing);
   }
 
-  async function loadData() {
+  async function loadData(force = false) {
+    if (dirty && !force) {
+      updateStatus();
+      return;
+    }
     try {
+      if (hasGithubRepo()) {
+        const remote = await readGithubFile();
+        items = remote.items;
+        revision = remote.revision;
+        remoteSha = remote.sha;
+        dirty = false;
+        saveLocal();
+        render();
+        updateStatus('已读取 GitHub shortcuts.json');
+        return;
+      }
       const response = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error(`GET ${response.status}`);
       const remote = await response.json();
@@ -139,8 +262,8 @@
         render();
       }
       updateStatus();
-    } catch {
-      updateStatus(items.length ? '无法读取 shortcuts.json · 当前显示本机缓存' : '无法读取 shortcuts.json · 请使用本地服务器打开页面');
+    } catch (error) {
+      updateStatus(items.length ? `无法读取 GitHub 数据 · 当前显示本机缓存（${error.message}）` : `无法读取数据（${error.message}）`);
       if (!items.length) showToast('无法读取 shortcuts.json');
     }
   }
@@ -243,7 +366,28 @@
     revision += 1;
     saveLocal();
     render();
-    showToast(`${message} · 请导出 JSON 保存到仓库`);
+    showToast(github.token ? `${message} · 正在同步 GitHub` : `${message} · 请配置 GitHub Token`);
+    syncGithub();
+  }
+
+  async function syncGithub() {
+    if (!dirty || syncing || !github.token || !hasGithubRepo()) return;
+    syncing = true;
+    updateStatus();
+    try {
+      await writeGithubFile();
+      dirty = false;
+      saveLocal();
+      render();
+      showToast('已同步到 GitHub');
+      updateStatus('已同步到 GitHub shortcuts.json');
+    } catch (error) {
+      updateStatus(`GitHub 同步失败：${error.message}`);
+      showToast('GitHub 同步失败，请检查配置');
+    } finally {
+      syncing = false;
+      updateStatus();
+    }
   }
 
   function openDialog(id = '') {
@@ -307,8 +451,8 @@
     link.download = 'shortcuts.json';
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 0);
-    showToast('已导出 shortcuts.json，请提交到 GitHub');
-    updateStatus('已生成 shortcuts.json · 用它覆盖仓库文件后提交 GitHub');
+    showToast('已导出 shortcuts.json');
+    updateStatus(github.token ? '已导出本地备份 · GitHub 同步仍由页面自动完成' : '已导出 shortcuts.json · 配置 GitHub 后可自动同步');
   }
 
   function importItems(event) {
@@ -329,6 +473,52 @@
     };
     reader.readAsText(file);
   }
+
+  function openGithubDialog() {
+    githubOwnerInput.value = github.owner;
+    githubRepoInput.value = github.repo;
+    githubBranchInput.value = github.branch;
+    githubPathInput.value = github.path;
+    githubTokenInput.value = '';
+    githubError.textContent = '';
+    githubDialog.showModal();
+    setTimeout(() => (githubTokenInput.value ? githubTokenInput : githubOwnerInput).focus(), 40);
+  }
+
+  githubButton.addEventListener('click', (event) => { event.stopPropagation(); openGithubDialog(); });
+  closeGithubDialogButton.addEventListener('click', () => githubDialog.close());
+  cancelGithubDialogButton.addEventListener('click', () => githubDialog.close());
+  githubDialog.addEventListener('click', (event) => { if (event.target === githubDialog) githubDialog.close(); });
+  clearGithubButton.addEventListener('click', () => {
+    github.token = '';
+    localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(github));
+    githubTokenInput.value = '';
+    githubError.textContent = 'Token 已从当前设备清除。';
+    updateStatus();
+  });
+  githubForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    githubError.textContent = '';
+    const next = {
+      owner: githubOwnerInput.value.trim(),
+      repo: githubRepoInput.value.trim(),
+      branch: githubBranchInput.value.trim(),
+      path: githubPathInput.value.trim(),
+      token: githubTokenInput.value.trim() || github.token,
+    };
+    if (!next.owner || !next.repo || !next.branch || !next.path) {
+      githubError.textContent = '请完整填写仓库信息。';
+      return;
+    }
+    github = next;
+    localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(github));
+    githubDialog.close();
+    if (dirty && github.token) {
+      syncGithub();
+    } else {
+      await loadData(true);
+    }
+  });
 
   form.addEventListener('submit', save);
   closeDialogButton.addEventListener('click', () => dialog.close());
@@ -362,5 +552,6 @@
   document.addEventListener('click', closeMenu);
 
   render();
-  loadData();
+  if (dirty && github.token) syncGithub();
+  else loadData();
 })();

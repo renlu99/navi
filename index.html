@@ -18,6 +18,7 @@
       <div class="actions">
         <button id="importButton" type="button">导入</button>
         <button id="exportButton" type="button">导出</button>
+        <button id="githubButton" type="button" aria-label="GitHub 同步设置">GitHub</button>
         <input id="importInput" type="file" accept="application/json,.json" hidden>
       </div>
     </header>
@@ -39,12 +40,32 @@
     </form>
   </dialog>
 
+  <dialog class="dialog" id="githubDialog">
+    <form id="githubForm">
+      <button class="dialog-close" id="closeGithubDialogButton" type="button" aria-label="关闭">×</button>
+      <h2>GitHub 同步</h2>
+      <p class="login-copy">Token 只保存在当前设备浏览器中，用于把 shortcuts.json 写回指定仓库。</p>
+      <label>用户名<input id="githubOwnerInput" autocomplete="username" placeholder="renlu99" required></label>
+      <label>仓库<input id="githubRepoInput" autocomplete="off" placeholder="navi" required></label>
+      <label>分支<input id="githubBranchInput" autocomplete="off" value="main" required></label>
+      <label>文件路径<input id="githubPathInput" autocomplete="off" value="shortcuts.json" required></label>
+      <label>Fine-grained Token<input id="githubTokenInput" type="password" autocomplete="new-password" placeholder="github_pat_…"></label>
+      <p class="github-help">Token 需要只授权此仓库的 Contents: Read and write。留空可读取公开仓库，但不能自动保存。</p>
+      <p class="login-error" id="githubError"></p>
+      <div class="dialog-actions">
+        <button class="cancel-button" id="clearGithubButton" type="button">清除 Token</button>
+        <button class="cancel-button" id="cancelGithubDialogButton" type="button">取消</button>
+        <button class="save-button" type="submit">保存并读取</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="card-menu" id="cardMenu" hidden>
     <button id="editButton" type="button">编辑</button>
     <button id="moveButton" type="button">移动</button>
     <button id="deleteButton" class="danger" type="button">删除</button>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=8" defer></script>
+  <script src="app.js?v=9" defer></script>
 </body>
 </html>

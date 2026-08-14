@@ -40,6 +40,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 .dialog label input { display:block; width:100%; height:41px; margin-top:7px; padding:0 10px; border:1px solid var(--line); border-radius:4px; outline:0; color:var(--text); background:#fff; font-size:13px; }
 .dialog label input:focus { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue); }
 .login-copy { margin:-8px 0 18px; color:var(--muted); font-size:13px; line-height:1.6; }
+.github-help { margin:12px 0 -8px; color:var(--muted); font-size:11px; line-height:1.5; }
 .login-error { min-height:18px; margin:10px 0 -8px; color:var(--danger); font-size:12px; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:24px; }
 .cancel-button,.save-button { height:35px; padding:0 17px; border:0; border-radius:4px; font-size:12px; font-weight:400; }
@@ -65,6 +66,7 @@ button,input { font:inherit; } button { cursor:pointer; }
   .data-status { max-width:230px; line-height:1.4; }
   .actions { gap:6px; }
   .actions button { min-width:54px; height:40px; padding:0 10px; }
+  .actions button:last-of-type { min-width:62px; }
   .shortcut-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px 6px; }
   .shortcut-link { padding:8px 3px; }
   .shortcut-icon { width:48px; height:48px; margin-bottom:8px; font-size:19px; }
