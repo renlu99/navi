@@ -1,2 +1,6 @@
 data/.token
 data/state.json
+site-navigation
+.env
+*.dump
+data/icons/*.img

@@ -1,13 +1,13 @@
 :root { --page:#fff; --card:#f8f9fa; --hover:#f1f3f4; --text:#202124; --muted:#70757a; --line:#dadce0; --blue:#1a73e8; --danger:#c5221f; }
 * { box-sizing:border-box; }
 html, body { min-width:320px; min-height:100%; margin:0; }
-body { color:var(--text); background:var(--page); font-family:Arial,"Microsoft YaHei",sans-serif; overflow-x:hidden; }
+body { color:var(--text); background:var(--page); font-family:"Microsoft YaHei","微软雅黑",Arial,sans-serif; font-size:14px; font-weight:400; letter-spacing:-.01em; overflow-x:hidden; text-rendering:optimizeLegibility; }
 button,input { font:inherit; } button { cursor:pointer; }
 .page { width:min(1100px,calc(100% - 40px)); margin:auto; padding:24px 0 50px; }
 .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:72px; }
-.topbar h1 { margin:0; font-size:22px; font-weight:400; }
+.topbar h1 { margin:0; color:#252b3a; font-family:"Microsoft YaHei","微软雅黑",Arial,sans-serif; font-size:20px; font-weight:400; letter-spacing:-.01em; }
 .actions { display:flex; gap:8px; }
-.actions button { min-width:58px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:5px; color:var(--blue); background:#fff; font-size:13px; }
+.actions button { min-width:58px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:5px; color:var(--blue); background:#fff; font-size:12px; }
 .actions button:hover { background:var(--hover); }
 .shortcut-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:22px 14px; }
 .shortcut { position:relative; min-width:0; text-align:center; }
@@ -16,8 +16,8 @@ button,input { font:inherit; } button { cursor:pointer; }
 .shortcut-link:hover { background:var(--card); }
 .shortcut-icon { display:grid; place-items:center; width:50px; height:50px; margin:0 auto 10px; overflow:hidden; border-radius:50%; color:#5f6368; background:#f1f3f4; font-size:20px; }
 .shortcut-icon img { width:25px; height:25px; object-fit:contain; }
-.shortcut-name { overflow:hidden; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
-.shortcut-url { margin-top:4px; overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.shortcut-name { overflow:hidden; font-size:12px; font-weight:400; text-overflow:ellipsis; white-space:nowrap; }
+.shortcut-url { margin-top:4px; overflow:hidden; color:var(--muted); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
 .add-shortcut .shortcut-link { color:var(--blue); }
 .add-shortcut .shortcut-icon { color:var(--blue); font-size:30px; font-weight:300; }
 .shortcut-more { position:absolute; top:2px; right:2px; display:grid; place-items:center; width:25px; height:25px; padding:0; border:0; border-radius:50%; color:var(--muted); background:transparent; opacity:0; font-size:20px; line-height:1; }
@@ -30,16 +30,16 @@ button,input { font:inherit; } button { cursor:pointer; }
 .dialog { width:min(380px,calc(100% - 32px)); max-height:calc(100dvh - 24px); padding:0; border:0; border-radius:10px; color:var(--text); background:#fff; box-shadow:0 8px 30px rgba(60,64,67,.25); }
 .dialog::backdrop { background:rgba(32,33,36,.35); }
 .dialog form { position:relative; padding:24px; }
-.dialog h2 { margin:0 0 22px; font-size:19px; font-weight:400; }
+.dialog h2 { margin:0 0 22px; font-size:18px; font-weight:400; }
 .dialog-close { position:absolute; top:13px; right:13px; width:30px; height:30px; padding:0; border:0; border-radius:50%; color:var(--muted); background:transparent; font-size:23px; line-height:1; }
 .dialog-close:hover { background:var(--hover); }
-.dialog label { display:block; margin-top:15px; color:var(--muted); font-size:12px; }
-.dialog label input { display:block; width:100%; height:41px; margin-top:7px; padding:0 10px; border:1px solid var(--line); border-radius:4px; outline:0; color:var(--text); background:#fff; font-size:14px; }
+.dialog label { display:block; margin-top:15px; color:var(--muted); font-size:11px; }
+.dialog label input { display:block; width:100%; height:41px; margin-top:7px; padding:0 10px; border:1px solid var(--line); border-radius:4px; outline:0; color:var(--text); background:#fff; font-size:13px; }
 .dialog label input:focus { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue); }
 .login-copy { margin:-8px 0 18px; color:var(--muted); font-size:13px; line-height:1.6; }
 .login-error { min-height:18px; margin:10px 0 -8px; color:var(--danger); font-size:12px; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:24px; }
-.cancel-button,.save-button { height:35px; padding:0 17px; border:0; border-radius:4px; font-weight:600; }
+.cancel-button,.save-button { height:35px; padding:0 17px; border:0; border-radius:4px; font-size:12px; font-weight:400; }
 .cancel-button { color:var(--blue); background:transparent; }
 .cancel-button:hover { background:var(--hover); }
 .save-button { color:#fff; background:var(--blue); }
@@ -58,7 +58,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 @media (max-width:600px) {
   .page { width:calc(100% - 24px); padding:16px max(0px, env(safe-area-inset-right)) 38px max(0px, env(safe-area-inset-left)); }
   .topbar { margin-bottom:42px; }
-  .topbar h1 { font-size:20px; }
+  .topbar h1 { font-size:18px; }
   .actions { gap:6px; }
   .actions button { min-width:54px; height:40px; padding:0 10px; }
   .shortcut-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px 6px; }
@@ -79,7 +79,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 @media (max-width:420px) {
   .page { width:calc(100% - 20px); }
   .topbar { margin-bottom:34px; }
-  .topbar h1 { font-size:19px; }
+  .topbar h1 { font-size:17px; }
   .actions button { min-width:50px; padding:0 8px; font-size:12px; }
   .shortcut-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px 2px; }
   .shortcut-link { padding:7px 1px; }

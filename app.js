@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const API = 'api.php';
+  const API = '/api';
   const STORAGE_KEY = 'chrome-like-shortcuts-v2';
   const canSync = location.protocol === 'http:' || location.protocol === 'https:';
   const grid = document.querySelector('#shortcutGrid');
@@ -28,8 +28,6 @@
   let draggedId = '';
   let toastTimer;
   let nameWasAutoFilled = false;
-  let liveSource = null;
-  let liveRetryTimer;
 
   function readCache() {
     try {
@@ -190,39 +188,6 @@
     } catch (error) { if (error.auth) showLogin(); /* 服务器不可用时继续使用本机缓存 */ }
   }
 
-  function reconnectLiveSync(delay = 0) {
-    clearTimeout(liveRetryTimer);
-    liveRetryTimer = setTimeout(connectLiveSync, delay);
-  }
-
-  function connectLiveSync() {
-    if (!canSync || !window.EventSource || (liveSource && liveSource.readyState !== EventSource.CLOSED)) return;
-    liveSource = new EventSource(`${API}?action=events&revision=${encodeURIComponent(revision)}`, { withCredentials: true });
-    liveSource.addEventListener('state', (event) => {
-      let remote;
-      try { remote = JSON.parse(event.data); } catch {
-        liveSource.close();
-        liveSource = null;
-        reconnectLiveSync(3000);
-        return;
-      }
-      liveSource.close();
-      liveSource = null;
-      applyRemote(remote);
-      reconnectLiveSync();
-    });
-    liveSource.addEventListener('timeout', () => {
-      liveSource.close();
-      liveSource = null;
-      reconnectLiveSync();
-    });
-    liveSource.onerror = () => {
-      if (liveSource) liveSource.close();
-      liveSource = null;
-      loadRemote().finally(() => reconnectLiveSync(3000));
-    };
-  }
-
   async function syncRemote() {
     if (!canSync || syncing || !dirty) return;
     syncing = true;
@@ -371,15 +336,10 @@
   document.querySelector('#importButton').addEventListener('click', () => document.querySelector('#importInput').click());
   document.querySelector('#importInput').addEventListener('change', importItems);
   document.addEventListener('click', closeMenu);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadRemote(); connectLiveSync(); } });
-  window.addEventListener('online', () => { if (dirty) syncRemote(); else { loadRemote(); connectLiveSync(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+  window.addEventListener('online', () => { if (dirty) syncRemote(); else loadRemote(); });
 
-  function registerServiceWorker() {
-    if (!canSync || !('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('./sw.js?v=2', { updateViaCache: 'none' }).catch(() => {});
-  }
-
-  registerServiceWorker();
   render();
-  loadRemote().finally(connectLiveSync);
+  loadRemote();
+  setInterval(() => { if (!document.hidden) dirty ? syncRemote() : loadRemote(); }, 4000);
 })();
