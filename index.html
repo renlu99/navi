@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="preconnect" href="https://www.google.com" crossorigin>
+  <title>快捷方式</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <h1>快捷方式</h1>
+      <div class="actions">
+        <button id="importButton" type="button">导入</button>
+        <button id="exportButton" type="button">导出</button>
+        <input id="importInput" type="file" accept="application/json,.json" hidden>
+      </div>
+    </header>
+
+    <section class="shortcut-grid" id="shortcutGrid" aria-live="polite"></section>
+  </main>
+
+  <dialog class="dialog" id="shortcutDialog">
+    <form id="shortcutForm" method="dialog">
+      <button class="dialog-close" id="closeDialogButton" type="button" aria-label="关闭">×</button>
+      <h2 id="dialogTitle">添加快捷方式</h2>
+      <input id="shortcutId" type="hidden">
+      <label>名称<input id="nameInput" maxlength="40" placeholder="留空自动使用网址名称"></label>
+      <label>网址<input id="urlInput" type="text" inputmode="url" maxlength="2000" placeholder="example.com" required></label>
+      <div class="dialog-actions">
+        <button class="cancel-button" id="cancelDialogButton" type="button">取消</button>
+        <button class="save-button" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="loginDialog">
+    <form id="loginForm">
+      <h2>登录快捷方式</h2>
+      <p class="login-copy">首次在此设备使用时输入一次密码，之后会自动保持登录。</p>
+      <label>密码<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <p class="login-error" id="loginError"></p>
+      <div class="dialog-actions">
+        <button class="save-button" type="submit">登录</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="card-menu" id="cardMenu" hidden>
+    <button id="editButton" type="button">编辑</button>
+    <button id="deleteButton" class="danger" type="button">删除</button>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="app.js?v=4" defer></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+Options -Indexes
+<FilesMatch "^(data|\.git|README\.md|config\.php|.*\.example)$">
+  Require all denied
+</FilesMatch>
+<FilesMatch "^shortcuts\.json$">
+  Require all denied
+</FilesMatch>
