@@ -37,6 +37,7 @@
   let github = readGithubConfig();
   let remoteSha = '';
   let syncing = false;
+  let lastPollAt = 0;
   let activeMenuId = '';
   let moveModeId = '';
   let draggedId = '';
@@ -76,7 +77,7 @@
   function hasGithubRepo() { return Boolean(github.owner && github.repo && github.branch && github.path); }
 
   function githubFileUrl() {
-    return `${GITHUB_API}/repos/${encodeURIComponent(github.owner)}/${encodeURIComponent(github.repo)}/contents/${github.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(github.branch)}`;
+    return `${GITHUB_API}/repos/${encodeURIComponent(github.owner)}/${encodeURIComponent(github.repo)}/contents/${github.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(github.branch)}&t=${Date.now()}`;
   }
 
   function githubHeaders() {
@@ -102,7 +103,7 @@
   }
 
   async function githubResponse(url, options = {}) {
-    const response = await fetch(url, { ...options, headers: { ...githubHeaders(), ...(options.headers || {}) } });
+    const response = await fetch(url, { ...options, cache: 'no-store', headers: { ...githubHeaders(), ...(options.headers || {}) } });
     let payload = null;
     try { payload = await response.json(); } catch { /* 非 JSON 响应 */ }
     if (!response.ok) {
@@ -243,6 +244,10 @@
     try {
       if (hasGithubRepo()) {
         const remote = await readGithubFile();
+        if (!force && remote.sha === remoteSha) {
+          updateStatus();
+          return;
+        }
         items = remote.items;
         revision = remote.revision;
         remoteSha = remote.sha;
@@ -550,6 +555,26 @@
   document.querySelector('#importButton').addEventListener('click', () => document.querySelector('#importInput').click());
   document.querySelector('#importInput').addEventListener('change', importItems);
   document.addEventListener('click', closeMenu);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      lastPollAt = 0;
+      pollGithub();
+    }
+  });
+  window.addEventListener('online', () => {
+    lastPollAt = 0;
+    pollGithub();
+  });
+
+  function pollGithub() {
+    if (document.hidden || dirty || syncing || !hasGithubRepo()) return;
+    const interval = github.token ? 15000 : 60000;
+    if (Date.now() - lastPollAt < interval) return;
+    lastPollAt = Date.now();
+    loadData();
+  }
+
+  setInterval(pollGithub, 15000);
 
   render();
   if (dirty && github.token) syncGithub();
