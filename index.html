@@ -11,7 +11,10 @@
 <body>
   <main class="page">
     <header class="topbar">
-      <h1>仁露的快捷导航</h1>
+      <div>
+        <h1>仁露的快捷导航</h1>
+        <p class="data-status" id="dataStatus">正在读取 shortcuts.json…</p>
+      </div>
       <div class="actions">
         <button id="importButton" type="button">导入</button>
         <button id="exportButton" type="button">导出</button>
@@ -36,23 +39,12 @@
     </form>
   </dialog>
 
-  <dialog class="dialog" id="loginDialog">
-    <form id="loginForm">
-      <h2>登录快捷方式</h2>
-      <p class="login-copy">首次在此设备使用时输入一次密码，之后会自动保持登录。</p>
-      <label>密码<input id="loginPassword" type="password" autocomplete="current-password" required></label>
-      <p class="login-error" id="loginError"></p>
-      <div class="dialog-actions">
-        <button class="save-button" type="submit">登录</button>
-      </div>
-    </form>
-  </dialog>
-
   <div class="card-menu" id="cardMenu" hidden>
     <button id="editButton" type="button">编辑</button>
+    <button id="moveButton" type="button">移动</button>
     <button id="deleteButton" class="danger" type="button">删除</button>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=4" defer></script>
+  <script src="app.js?v=8" defer></script>
 </body>
 </html>

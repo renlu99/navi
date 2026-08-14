@@ -1,6 +1,4 @@
-data/.token
-data/state.json
-site-navigation
-.env
-*.dump
-data/icons/*.img
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
