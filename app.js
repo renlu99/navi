@@ -2,6 +2,7 @@
   'use strict';
 
   const DATA_URL = './shortcuts.json';
+  const ICONS_DIR = './icons/';
   const STORAGE_KEY = 'chrome-like-shortcuts-static-v1';
   const GITHUB_CONFIG_KEY = 'navi-github-config-v1';
   const GITHUB_API = 'https://api.github.com';
@@ -155,6 +156,7 @@
       id: String(item.id || makeId()),
       title: String(item.title).trim().slice(0, 80),
       url: normalizeUrl(String(item.url).trim()).slice(0, 2000),
+      icon: normalizeIconPath(item.icon),
       updatedAt: item.updatedAt || new Date().toISOString(),
     })).filter((item) => {
       if (!item.title || !item.url || seen.has(item.id)) return false;
@@ -185,6 +187,11 @@
     try { return new URL(normalizeUrl(value)).hostname.replace(/^www\./, ''); } catch { return ''; }
   }
 
+  function normalizeIconPath(value) {
+    const icon = String(value || '').trim().replace(/^\.\//, '');
+    return /^icons\/[A-Za-z0-9._-]+$/.test(icon) ? icon : '';
+  }
+
   function iconFor(item) { return (item.title || '✦').trim().slice(0, 1).toUpperCase(); }
 
   function faviconSources(item) {
@@ -199,12 +206,17 @@
     } catch { return []; }
   }
 
+  function iconSources(item) {
+    const hosted = item.icon ? `${ICONS_DIR}${encodeURIComponent(item.icon.slice('icons/'.length))}` : '';
+    return [hosted, ...faviconSources(item)].filter(Boolean);
+  }
+
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   }
 
   function iconMarkup(item) {
-    const sources = faviconSources(item);
+    const sources = iconSources(item);
     if (!sources.length) return escapeHtml(iconFor(item));
     return `<img src="${escapeHtml(sources[0])}" data-next="${escapeHtml(sources.slice(1).join('|'))}" data-letter="${escapeHtml(iconFor(item))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="shortcutIconError(this)">`;
   }
@@ -417,6 +429,7 @@
     if (existing) {
       existing.title = title;
       existing.url = url;
+      existing.icon = '';
       existing.updatedAt = new Date().toISOString();
     } else {
       items.push({ id: makeId(), title, url, updatedAt: new Date().toISOString() });
