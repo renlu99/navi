@@ -1,12 +1,13 @@
 import base64
 import hashlib
+from html.parser import HTMLParser
 import json
 import os
 import re
 import sys
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -70,6 +71,65 @@ def icon_candidates(url):
     ]
 
 
+class IconLinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.icon_links = []
+        self.manifest_links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != "link":
+            return
+        values = {key.lower(): value for key, value in attrs if value}
+        href = values.get("href")
+        rels = set((values.get("rel") or "").lower().split())
+        if not href:
+            return
+        if "manifest" in rels:
+            self.manifest_links.append(href)
+        if {"icon", "apple-touch-icon", "mask-icon"} & rels:
+            self.icon_links.append(href)
+
+
+def page_icon_candidates(url):
+    request = Request(
+        url,
+        headers={
+            "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+            "User-Agent": USER_AGENT,
+        },
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            html = response.read(1024 * 1024 + 1)
+            if len(html) > 1024 * 1024:
+                return []
+            base_url = response.geturl()
+            content_type = response.headers.get_content_type().lower()
+        if "html" not in content_type and b"<html" not in html[:512].lower():
+            return []
+        parser = IconLinkParser()
+        parser.feed(html.decode("utf-8", errors="ignore"))
+        candidates = [urljoin(base_url, href) for href in parser.icon_links]
+        for href in parser.manifest_links:
+            manifest_url = urljoin(base_url, href)
+            try:
+                manifest_request = Request(
+                    manifest_url,
+                    headers={"Accept": "application/manifest+json,application/json,*/*;q=0.5", "User-Agent": USER_AGENT},
+                )
+                with urlopen(manifest_request, timeout=15) as manifest_response:
+                    manifest = json.loads(manifest_response.read(256 * 1024).decode("utf-8"))
+                for icon in manifest.get("icons", []):
+                    if isinstance(icon, dict) and icon.get("src"):
+                        candidates.append(urljoin(manifest_url, icon["src"]))
+            except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+                continue
+        return [candidate for candidate in candidates if urlparse(candidate).scheme in {"http", "https"}]
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return []
+
+
 def looks_like_image(data, content_type):
     sample = data[:512].lstrip().lower()
     if b"<html" in sample or b"<!doctype" in sample:
@@ -109,7 +169,10 @@ def extension_for(url, content_type, data):
 
 
 def download_icon(url):
-    for candidate in icon_candidates(url):
+    candidates = icon_candidates(url)
+    seen = set(candidates)
+    candidates.extend(candidate for candidate in page_icon_candidates(url) if candidate not in seen)
+    for candidate in candidates:
         request = Request(
             candidate,
             headers={
