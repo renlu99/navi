@@ -1,11 +1,8 @@
 name: Fetch shortcut icons
 
 on:
-  push:
-    paths:
-      - shortcuts.json
-      - scripts/fetch_icons.py
-      - .github/workflows/fetch-icons.yml
+  schedule:
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -27,7 +24,12 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Fetch missing icons
+      - name: Fetch missing icons from navi-data
+        env:
+          NAVI_DATA_REPO: renlu99/navi-data
+          NAVI_DATA_BRANCH: main
+          NAVI_DATA_PATH: shortcuts.json
+          NAVI_DATA_TOKEN: ${{ secrets.NAVI_DATA_TOKEN }}
         run: python scripts/fetch_icons.py
 
       - name: Commit hosted icons
@@ -38,6 +40,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add shortcuts.json icons
+          git add icon-manifest.json icons
           git commit -m "保存快捷方式图标"
           git push

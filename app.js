@@ -3,6 +3,7 @@
 
   const DATA_URL = './shortcuts.json';
   const ICONS_DIR = './icons/';
+  const ICON_MANIFEST_URL = './icon-manifest.json';
   const STORAGE_KEY = 'chrome-like-shortcuts-static-v1';
   const GITHUB_CONFIG_KEY = 'navi-github-config-v1';
   const GITHUB_API = 'https://api.github.com';
@@ -36,6 +37,7 @@
   let revision = cached.revision;
   let dirty = cached.dirty;
   let github = readGithubConfig();
+  let hostedIcons = {};
   let remoteSha = '';
   let syncing = false;
   let lastPollAt = 0;
@@ -207,8 +209,24 @@
   }
 
   function iconSources(item) {
-    const hosted = item.icon ? `${ICONS_DIR}${encodeURIComponent(item.icon.slice('icons/'.length))}` : '';
+    const iconPath = normalizeIconPath(item.icon) || normalizeIconPath(hostedIcons[item.id]);
+    const hosted = iconPath ? `${ICONS_DIR}${encodeURIComponent(iconPath.slice('icons/'.length))}` : '';
     return [hosted, ...faviconSources(item)].filter(Boolean);
+  }
+
+  async function loadIconManifest() {
+    try {
+      const response = await fetch(`${ICON_MANIFEST_URL}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) return;
+      const manifest = await response.json();
+      hostedIcons = Object.fromEntries(Object.entries(manifest || {}).map(([id, entry]) => [
+        id,
+        typeof entry === 'string' ? entry : entry?.path,
+      ]).filter(([, path]) => normalizeIconPath(path)));
+      render();
+    } catch {
+      // 没有图标清单时继续使用网站原始图标回退逻辑。
+    }
   }
 
   function escapeHtml(value) {
@@ -590,6 +608,7 @@
   setInterval(pollGithub, 5000);
 
   render();
+  loadIconManifest();
   if (dirty && github.token) syncGithub();
   else loadData();
 })();

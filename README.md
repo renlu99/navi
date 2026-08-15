@@ -4,13 +4,13 @@
 
 ## 数据同步方式
 
-`shortcuts.json` 是公共数据源。GitHub Pages 本身不能直接写回仓库，因此页面提供两种方式：
+项目使用两个 GitHub 仓库：公开的 `navi` 负责网站和图标，私有的 `navi-data` 只保存 `shortcuts.json`。GitHub Pages 本身不能直接写回仓库，因此页面提供两种方式：
 
 - 配置 GitHub Token 后，添加、编辑、删除和排序会自动通过 GitHub Contents API 提交 `shortcuts.json`。
-- 仓库中的 GitHub Actions 会在 `shortcuts.json` 更新后，从网站服务器侧抓取图标并保存到 `icons/`，页面优先读取这些托管图标。
+- `navi` 中的 GitHub Actions 每 10 分钟读取私有 `navi-data/shortcuts.json`，从网站服务器侧抓取图标并保存到公开库的 `icons/`；页面优先读取这些托管图标。
 - 没有配置 Token 时，修改只保存在当前浏览器，也可以使用“导出”下载 JSON 后手动提交。
 
-适合个人在 PC、手机和平板之间同步使用。其他设备打开页面或刷新后，会从 GitHub 读取最新的 `shortcuts.json`。
+适合个人在 PC、手机和平板之间同步使用。其他设备打开页面或刷新后，会从 GitHub 读取最新的私有 `shortcuts.json`。
 
 ## GitHub 自动同步配置
 
@@ -24,7 +24,7 @@
 
 GitHub Contents API 要求更新文件时携带文件当前的 `sha`，页面会自动读取最新版本并提交更新。相关权限参考 [GitHub 官方文档](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)。
 
-首次使用时，请在仓库的 `Settings → Actions → General` 确认允许 Actions 写入仓库内容（工作流已声明 `Contents: Read and write`）。添加或编辑快捷方式后，`Fetch shortcut icons` 工作流会自动运行；图标抓取失败时，页面仍会回退到网站原始图标或文字首字母。
+首次使用时，需要在公开 `navi` 仓库添加 Actions secret：`Settings → Secrets and variables → Actions → New repository secret`，名称填写 `NAVI_DATA_TOKEN`，值使用一个只对私有 `navi-data` 仓库拥有 `Contents: Read` 权限的 Fine-grained Token。同时在 `navi` 的 `Settings → Actions → General` 确认允许 Actions 写入仓库内容（工作流已声明 `Contents: Read and write`）。工作流每 10 分钟检查一次私有数据，也可以在 Actions 页面手动运行；图标抓取失败时，页面仍会回退到网站原始图标或文字首字母。
 
 ## 文件说明
 
@@ -34,9 +34,11 @@ style.css        页面样式
 app.js           页面交互和 GitHub 同步逻辑
 shortcuts.json   快捷方式数据
 scripts/fetch_icons.py
-                  GitHub Actions 使用的图标抓取脚本
+                  从私有 navi-data 抓取图标的脚本
 .github/workflows/fetch-icons.yml
                   图标自动抓取工作流
+icon-manifest.json
+                  公开图标路径清单
 ```
 
 ## 本地预览

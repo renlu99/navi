@@ -1,17 +1,60 @@
+import base64
+import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_FILE = ROOT / "shortcuts.json"
+ICON_MANIFEST_FILE = ROOT / "icon-manifest.json"
 ICON_DIR = ROOT / "icons"
 MAX_BYTES = 512 * 1024
 USER_AGENT = "navi-icon-fetcher/1.0 (+https://github.com/)"
+
+
+def github_json(url, token):
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": USER_AGENT,
+        },
+    )
+    with urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def read_private_shortcuts():
+    token = os.environ.get("NAVI_DATA_TOKEN", "").strip()
+    repository = os.environ.get("NAVI_DATA_REPO", "renlu99/navi-data").strip()
+    branch = os.environ.get("NAVI_DATA_BRANCH", "main").strip()
+    path = os.environ.get("NAVI_DATA_PATH", "shortcuts.json").strip()
+    if not token:
+        raise ValueError("缺少 Actions secret NAVI_DATA_TOKEN")
+    if "/" not in repository or not path:
+        raise ValueError("NAVI_DATA_REPO 或 NAVI_DATA_PATH 配置不正确")
+
+    owner, repo = repository.split("/", 1)
+    api_url = (
+        f"https://api.github.com/repos/{quote(owner)}/{quote(repo)}"
+        f"/contents/{quote(path, safe='/')}?ref={quote(branch)}"
+    )
+    payload = github_json(api_url, token)
+    if payload.get("type") != "file" or not payload.get("content"):
+        raise ValueError("navi-data 中找不到 shortcuts.json")
+    raw = base64.b64decode("".join(payload["content"].split())).decode("utf-8")
+    document = json.loads(raw)
+    items = document if isinstance(document, list) else document.get("items", [])
+    if not isinstance(items, list):
+        raise ValueError("navi-data/shortcuts.json 的 items 必须是数组")
+    return items
 
 
 def icon_candidates(url):
@@ -40,7 +83,7 @@ def looks_like_image(data, content_type):
     if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
         return True
     if content_type == "image/svg+xml" or b"<svg" in sample:
-        return b"<html" not in sample and b"<script" not in sample
+        return b"<script" not in sample
     return content_type.startswith("image/")
 
 
@@ -90,67 +133,84 @@ def icon_path_for(item_id, extension):
     return f"icons/{safe_id}.{extension}"
 
 
-def remove_old_icon(item):
-    old = str(item.get("icon") or "")
-    if not old.startswith("icons/"):
+def source_hash(url):
+    return hashlib.sha256(str(url).encode("utf-8")).hexdigest()[:16]
+
+
+def manifest_entry(entry):
+    if isinstance(entry, str):
+        return {"path": entry, "sourceHash": ""}
+    return entry if isinstance(entry, dict) else {}
+
+
+def remove_old_icon(path):
+    if not isinstance(path, str) or not path.startswith("icons/"):
         return
-    old_file = ROOT / old
+    old_file = ROOT / path
     if old_file.is_file():
         old_file.unlink()
 
 
 def main():
-    document = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-    if isinstance(document, list):
-        items = document
-    else:
-        items = document.get("items", [])
-    if not isinstance(items, list):
-        raise ValueError("shortcuts.json 的 items 必须是数组")
+    items = read_private_shortcuts()
+    manifest = {}
+    if ICON_MANIFEST_FILE.is_file():
+        loaded = json.loads(ICON_MANIFEST_FILE.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            manifest = loaded
 
     ICON_DIR.mkdir(exist_ok=True)
     changed = False
+    active_ids = set()
     for item in items:
         if not isinstance(item, dict) or not item.get("id") or not item.get("url"):
             continue
-
-        current = str(item.get("icon") or "")
-        if current.startswith("icons/") and (ROOT / current).is_file():
+        item_id = str(item["id"])
+        active_ids.add(item_id)
+        url = str(item["url"])
+        current = manifest_entry(manifest.get(item_id))
+        current_path = current.get("path", "")
+        if not isinstance(current_path, str):
+            current_path = ""
+        current_hash = current.get("sourceHash", "")
+        if current_path.startswith("icons/") and (ROOT / current_path).is_file() and current_hash == source_hash(url):
             continue
 
-        result = download_icon(str(item["url"]))
+        result = download_icon(url)
         if not result:
-            if current:
-                item.pop("icon", None)
+            if item_id in manifest:
+                remove_old_icon(current_path)
+                manifest.pop(item_id, None)
                 changed = True
-            print(f"未找到图标: {item['url']}")
+            print(f"未找到图标: {url}")
             continue
 
         data, extension = result
-        relative_path = icon_path_for(item["id"], extension)
+        relative_path = icon_path_for(item_id, extension)
         target = ROOT / relative_path
         target.write_bytes(data)
-        if current and current != relative_path:
-            remove_old_icon(item)
-        if item.get("icon") != relative_path:
-            item["icon"] = relative_path
+        if current_path and current_path != relative_path:
+            remove_old_icon(current_path)
+        next_entry = {"path": relative_path, "sourceHash": source_hash(url)}
+        if manifest.get(item_id) != next_entry:
+            manifest[item_id] = next_entry
             changed = True
         print(f"已保存图标: {relative_path}")
 
+    for item_id in list(manifest):
+        if item_id not in active_ids:
+            remove_old_icon(manifest_entry(manifest[item_id]).get("path", ""))
+            manifest.pop(item_id, None)
+            changed = True
+
     if not changed:
         return
-
-    if isinstance(document, list):
-        output = items
-    else:
-        document["items"] = items
-        output = document
-    DATA_FILE.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    ICON_MANIFEST_FILE.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, json.JSONDecodeError, HTTPError, URLError) as error:
         print(f"图标抓取失败: {error}", file=sys.stderr)
         sys.exit(1)
