@@ -4,14 +4,14 @@ html, body { min-width:320px; min-height:100%; margin:0; }
 body { color:var(--text); background:var(--page); font-family:"Microsoft YaHei","微软雅黑",Arial,sans-serif; font-size:14px; font-weight:400; letter-spacing:-.01em; overflow-x:hidden; text-rendering:optimizeLegibility; }
 button,input { font:inherit; } button { cursor:pointer; }
 .page { width:min(1100px,calc(100% - 40px)); margin:auto; padding:24px 0 50px; }
-.topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:72px; }
+.topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; }
 .topbar h1 { margin:0; color:#252b3a; font-family:"Microsoft YaHei","微软雅黑",Arial,sans-serif; font-size:20px; font-weight:400; letter-spacing:-.01em; }
 .data-status { margin:7px 0 0; color:var(--muted); font-size:11px; }
 .data-status.pending { color:var(--blue); }
 .actions { display:flex; gap:8px; }
 .actions button { min-width:58px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:5px; color:var(--blue); background:#fff; font-size:12px; }
 .actions button:hover { background:var(--hover); }
-.shortcut-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:22px 14px; }
+.shortcut-grid { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:22px 14px; }
 .shortcut { position:relative; min-width:0; text-align:center; }
 .shortcut.dragging { opacity:.4; touch-action:none; }
 .shortcut.move-mode { outline:2px dashed var(--blue); outline-offset:2px; border-radius:12px; }
