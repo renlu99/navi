@@ -196,22 +196,11 @@
 
   function iconFor(item) { return (item.title || '✦').trim().slice(0, 1).toUpperCase(); }
 
-  function faviconSources(item) {
-    try {
-      const url = new URL(item.url);
-      return [
-        `${url.origin}/favicon.ico`,
-        `${url.origin}/favicon.png`,
-        `${url.origin}/favicon.svg`,
-        `${url.origin}/apple-touch-icon.png`,
-      ];
-    } catch { return []; }
-  }
-
   function iconSources(item) {
     const iconPath = normalizeIconPath(item.icon) || normalizeIconPath(hostedIcons[item.id]);
     const hosted = iconPath ? `${ICONS_DIR}${encodeURIComponent(iconPath.slice('icons/'.length))}` : '';
-    return [hosted, ...faviconSources(item)].filter(Boolean);
+    // 浏览器只读取本站已经托管的图标；没有托管图标时由 iconMarkup 返回名称首字母。
+    return hosted ? [hosted] : [];
   }
 
   async function loadIconManifest() {
@@ -225,7 +214,7 @@
       ]).filter(([, path]) => normalizeIconPath(path)));
       render();
     } catch {
-      // 没有图标清单时继续使用网站原始图标回退逻辑。
+      // 没有图标清单时继续使用快捷方式名称首字母。
     }
   }
 
