@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urljoin, urlparse
@@ -15,7 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 ICON_MANIFEST_FILE = ROOT / "icon-manifest.json"
 ICON_DIR = ROOT / "icons"
 MAX_BYTES = 512 * 1024
-USER_AGENT = "navi-icon-fetcher/1.0 (+https://github.com/)"
+MAX_HTML_BYTES = 1024 * 1024
+MAX_MANIFEST_BYTES = 256 * 1024
+REQUEST_TIMEOUT = 15
+MAX_RETRIES = 1
+USER_AGENT = "Mozilla/5.0 (compatible; navi-icon-fetcher/1.1; +https://github.com/)"
+RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
 def github_json(url, token):
@@ -71,63 +77,111 @@ def icon_candidates(url):
     ]
 
 
+def provider_candidates(url):
+    """Return server-side favicon providers used only after direct discovery fails."""
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    if not hostname:
+        return []
+    encoded_hostname = quote(hostname, safe=".")
+    return [
+        f"https://www.google.com/s2/favicons?sz=128&domain={encoded_hostname}",
+        f"https://icons.duckduckgo.com/ip3/{encoded_hostname}.ico",
+    ]
+
+
 class IconLinkParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.icon_links = []
         self.manifest_links = []
+        self.base_href = ""
 
     def handle_starttag(self, tag, attrs):
-        if tag.lower() != "link":
-            return
         values = {key.lower(): value for key, value in attrs if value}
         href = values.get("href")
+        if tag.lower() == "base":
+            if not self.base_href and href:
+                self.base_href = href
+            return
+        if tag.lower() != "link":
+            return
         rels = set((values.get("rel") or "").lower().split())
         if not href:
             return
         if "manifest" in rels:
             self.manifest_links.append(href)
-        if {"icon", "apple-touch-icon", "mask-icon"} & rels:
+        if {"icon", "apple-touch-icon", "apple-touch-icon-precomposed", "mask-icon"} & rels:
             self.icon_links.append(href)
 
 
+def request_bytes(url, headers, max_bytes, retries=MAX_RETRIES):
+    """Fetch a bounded response, retrying only transient transport/status failures."""
+    last_error = None
+    for attempt in range(retries + 1):
+        request = Request(url, headers=headers)
+        try:
+            with urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                data = response.read(max_bytes + 1)
+                return data, response
+        except HTTPError as error:
+            last_error = error
+            if error.code not in RETRYABLE_STATUS_CODES or attempt >= retries:
+                raise
+        except (URLError, TimeoutError) as error:
+            last_error = error
+            if attempt >= retries:
+                raise
+        time.sleep(1 + attempt)
+    raise last_error or URLError("请求失败")
+
+
 def page_icon_candidates(url):
-    request = Request(
-        url,
-        headers={
-            "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
-            "User-Agent": USER_AGENT,
-        },
-    )
     try:
-        with urlopen(request, timeout=15) as response:
-            html = response.read(1024 * 1024 + 1)
-            if len(html) > 1024 * 1024:
-                return []
-            base_url = response.geturl()
-            content_type = response.headers.get_content_type().lower()
+        html, response = request_bytes(
+            url,
+            headers={
+                "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "User-Agent": USER_AGENT,
+            },
+            max_bytes=MAX_HTML_BYTES,
+        )
+        final_url = response.geturl()
+        content_type = response.headers.get_content_type().lower()
+        if len(html) > MAX_HTML_BYTES:
+            return [], final_url, "首页超过大小限制"
         if "html" not in content_type and b"<html" not in html[:512].lower():
-            return []
+            return [], final_url, f"首页不是 HTML ({content_type or '未知类型'})"
         parser = IconLinkParser()
         parser.feed(html.decode("utf-8", errors="ignore"))
+        base_url = urljoin(final_url, parser.base_href) if parser.base_href else final_url
         candidates = [urljoin(base_url, href) for href in parser.icon_links]
         for href in parser.manifest_links:
             manifest_url = urljoin(base_url, href)
             try:
-                manifest_request = Request(
+                manifest_data, _ = request_bytes(
                     manifest_url,
                     headers={"Accept": "application/manifest+json,application/json,*/*;q=0.5", "User-Agent": USER_AGENT},
+                    max_bytes=MAX_MANIFEST_BYTES,
                 )
-                with urlopen(manifest_request, timeout=15) as manifest_response:
-                    manifest = json.loads(manifest_response.read(256 * 1024).decode("utf-8"))
-                for icon in manifest.get("icons", []):
+                manifest = json.loads(manifest_data.decode("utf-8"))
+                for icon in (manifest.get("icons", []) if isinstance(manifest, dict) else []):
                     if isinstance(icon, dict) and icon.get("src"):
                         candidates.append(urljoin(manifest_url, icon["src"]))
-            except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError) as error:
+                print(f"manifest 获取失败: {manifest_url} ({format_error(error)})")
                 continue
-        return [candidate for candidate in candidates if urlparse(candidate).scheme in {"http", "https"}]
-    except (HTTPError, URLError, TimeoutError, ValueError):
-        return []
+        return [candidate for candidate in candidates if urlparse(candidate).scheme in {"http", "https"}], final_url, ""
+    except (HTTPError, URLError, TimeoutError, ValueError) as error:
+        return [], "", format_error(error)
+
+
+def format_error(error):
+    if isinstance(error, HTTPError):
+        return f"HTTP {error.code}"
+    reason = getattr(error, "reason", None)
+    return str(reason or error)[:160]
 
 
 def looks_like_image(data, content_type):
@@ -169,26 +223,48 @@ def extension_for(url, content_type, data):
 
 
 def download_icon(url):
-    candidates = icon_candidates(url)
-    seen = set(candidates)
-    candidates.extend(candidate for candidate in page_icon_candidates(url) if candidate not in seen)
-    for candidate in candidates:
-        request = Request(
-            candidate,
-            headers={
-                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                "User-Agent": USER_AGENT,
-            },
-        )
-        try:
-            with urlopen(request, timeout=15) as response:
-                data = response.read(MAX_BYTES + 1)
+    attempted = set()
+
+    def try_candidates(candidates):
+        for candidate in candidates:
+            if candidate in attempted:
+                continue
+            attempted.add(candidate)
+            try:
+                data, response = request_bytes(
+                    candidate,
+                    headers={
+                        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                        "User-Agent": USER_AGENT,
+                    },
+                    max_bytes=MAX_BYTES,
+                )
                 content_type = response.headers.get_content_type().lower()
-            if len(data) <= MAX_BYTES and looks_like_image(data, content_type):
-                return data, extension_for(candidate, content_type, data)
-        except (HTTPError, URLError, TimeoutError, ValueError):
-            continue
-    return None
+                if len(data) <= MAX_BYTES and looks_like_image(data, content_type):
+                    return data, extension_for(candidate, content_type, data)
+            except (HTTPError, URLError, TimeoutError, ValueError):
+                continue
+        return None
+
+    # 先尝试传统路径。即使首页被 WAF 拦截，favicon.ico 仍可能允许访问。
+    result = try_candidates(icon_candidates(url))
+    if result:
+        return result
+
+    page_candidates, final_url, page_error = page_icon_candidates(url)
+    final_candidates = icon_candidates(final_url) if final_url else []
+    result = try_candidates(final_candidates + page_candidates)
+    if result:
+        return result
+
+    # 最后使用第三方服务器代为发现 favicon，避免反复撞击目标站点的 WAF。
+    provider_urls = provider_candidates(url)
+    if final_url:
+        provider_urls.extend(provider_candidates(final_url))
+    result = try_candidates(provider_urls)
+    if not result and page_error:
+        print(f"页面发现失败: {url} ({page_error})")
+    return result
 
 
 def icon_path_for(item_id, extension):
@@ -241,11 +317,10 @@ def main():
 
         result = download_icon(url)
         if not result:
-            if item_id in manifest:
-                remove_old_icon(current_path)
-                manifest.pop(item_id, None)
-                changed = True
-            print(f"未找到图标: {url}")
+            if current_path.startswith("icons/") and (ROOT / current_path).is_file():
+                print(f"图标抓取失败，保留旧图标: {url} -> {current_path}")
+            else:
+                print(f"未找到图标: {url}")
             continue
 
         data, extension = result

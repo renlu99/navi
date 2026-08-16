@@ -599,13 +599,13 @@
 
   function pollGithub() {
     if (document.hidden || dirty || syncing || !hasGithubRepo()) return;
-    const interval = github.token ? 5000 : 60000;
+    const interval = github.token ? 1000 : 60000;
     if (Date.now() - lastPollAt < interval) return;
     lastPollAt = Date.now();
     loadData();
   }
 
-  setInterval(pollGithub, 5000);
+  setInterval(pollGithub, 1000);
 
   render();
   loadIconManifest();

@@ -26,6 +26,7 @@ jobs:
 
       - name: Fetch missing icons from navi-data
         env:
+          PYTHONUNBUFFERED: '1'
           NAVI_DATA_REPO: renlu99/navi-data
           NAVI_DATA_BRANCH: main
           NAVI_DATA_PATH: shortcuts.json
