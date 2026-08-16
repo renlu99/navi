@@ -1,4 +1,4 @@
-:root { --page:#fff; --card:#f8f9fa; --hover:#f1f3f4; --text:#202124; --muted:#70757a; --line:#dadce0; --blue:#1a73e8; --danger:#c5221f; }
+:root { --page:#fff; --card:#dedede; --hover:#f1f3f4; --text:#202124; --muted:#70757a; --line:#dadce0; --blue:#1a73e8; --danger:#c5221f; }
 * { box-sizing:border-box; }
 html, body { min-width:320px; min-height:100%; margin:0; }
 body { color:var(--text); background:var(--page); font-family:"Microsoft YaHei","微软雅黑",Arial,sans-serif; font-size:14px; font-weight:400; letter-spacing:-.01em; overflow-x:hidden; text-rendering:optimizeLegibility; }
