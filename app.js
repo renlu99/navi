@@ -308,6 +308,7 @@
       let dragOffsetY = 0;
       let dragGhost = null;
       let dragOriginalOrder = [];
+      let removeDragEndListeners = () => {};
       const clearLongPress = () => clearTimeout(longPressTimer);
 
       function resetDraggedCardStyles() {
@@ -333,6 +334,17 @@
         dragGhost.style.left = `${rect.left}px`;
         dragGhost.style.top = `${rect.top}px`;
         document.body.append(dragGhost);
+        const pointerId = dragPointerId;
+        const handleDragEnd = (endEvent) => {
+          if (endEvent.pointerId !== pointerId) return;
+          finishTouchDrag(endEvent.type === 'pointerup');
+        };
+        window.addEventListener('pointerup', handleDragEnd, true);
+        window.addEventListener('pointercancel', handleDragEnd, true);
+        removeDragEndListeners = () => {
+          window.removeEventListener('pointerup', handleDragEnd, true);
+          window.removeEventListener('pointercancel', handleDragEnd, true);
+        };
       }
 
       function moveTouchPlaceholder(event) {
@@ -367,6 +379,9 @@
       function finishTouchDrag(saveOrder) {
         if (!touchDragging) return;
         touchDragging = false;
+        const cleanupDragEndListeners = removeDragEndListeners;
+        removeDragEndListeners = () => {};
+        cleanupDragEndListeners();
         if (dragPointerId && card.hasPointerCapture?.(dragPointerId)) card.releasePointerCapture?.(dragPointerId);
         if (saveOrder && touchMoved && dragGhost) {
           const order = [...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => entry.dataset.id);
