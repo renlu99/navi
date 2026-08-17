@@ -94,7 +94,9 @@ button,input { font:inherit; } button { cursor:pointer; }
   .shortcut-name { font-size:11px; }
 }
 @media (pointer:coarse) {
-  .shortcut[data-id] { touch-action:none; }
+  /* 让页面接管普通触摸手势，快捷卡片仍可在“移动”模式下拖拽。 */
+  .shortcut[data-id] { touch-action:pan-y; }
+  .shortcut[data-id].move-mode,.shortcut[data-id].dragging { touch-action:none; }
   .shortcut.show-actions .shortcut-more { opacity:1; }
   .shortcut-more, .actions button { min-height:40px; }
 }

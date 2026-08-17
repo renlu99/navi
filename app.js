@@ -301,18 +301,22 @@
       let longPressTriggered = false;
       let touchDragging = false;
       let touchMoved = false;
+      let touchStartX = 0;
+      let touchStartY = 0;
       const clearLongPress = () => clearTimeout(longPressTimer);
 
       card.addEventListener('pointerdown', (event) => {
         if (event.pointerType !== 'touch') return;
-        card.setPointerCapture?.(event.pointerId);
         longPressTriggered = false;
         touchDragging = false;
         touchMoved = false;
+        touchStartX = event.clientX;
+        touchStartY = event.clientY;
         if (moveModeId === card.dataset.id) {
           longPressTriggered = true;
           touchDragging = true;
           card.classList.add('dragging');
+          card.setPointerCapture?.(event.pointerId);
           return;
         }
         longPressTimer = setTimeout(() => {
@@ -323,7 +327,11 @@
         }, 550);
       });
       card.addEventListener('pointermove', (event) => {
-        if (event.pointerType !== 'touch' || !touchDragging) return;
+        if (event.pointerType !== 'touch') return;
+        if (!touchDragging) {
+          if (Math.hypot(event.clientX - touchStartX, event.clientY - touchStartY) > 8) clearLongPress();
+          return;
+        }
         event.preventDefault();
         touchMoved = true;
         const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.shortcut[data-id]');
