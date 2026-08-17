@@ -1,4 +1,5 @@
 import base64
+import gzip
 import hashlib
 from html.parser import HTMLParser
 import json
@@ -6,6 +7,7 @@ import os
 import re
 import sys
 import time
+import zlib
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urljoin, urlparse
@@ -73,6 +75,9 @@ def icon_candidates(url):
         f"{origin}/favicon.ico",
         f"{origin}/favicon.png",
         f"{origin}/favicon.svg",
+        f"{origin}/public/favicon.ico",
+        f"{origin}/public/favicon.png",
+        f"{origin}/public/favicon.svg",
         f"{origin}/apple-touch-icon.png",
     ]
 
@@ -136,17 +141,32 @@ def request_bytes(url, headers, max_bytes, retries=MAX_RETRIES):
     raise last_error or URLError("请求失败")
 
 
+def decode_content(data, response):
+    """Decode common HTTP compression before parsing HTML or manifests."""
+    encoding = (response.headers.get("Content-Encoding") or "").lower()
+    try:
+        if "gzip" in encoding:
+            return gzip.decompress(data)
+        if "deflate" in encoding:
+            return zlib.decompress(data)
+    except (OSError, zlib.error):
+        return data
+    return data
+
+
 def page_icon_candidates(url):
     try:
-        html, response = request_bytes(
+        compressed_html, response = request_bytes(
             url,
             headers={
                 "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Accept-Encoding": "identity",
                 "User-Agent": USER_AGENT,
             },
             max_bytes=MAX_HTML_BYTES,
         )
+        html = decode_content(compressed_html, response)
         final_url = response.geturl()
         content_type = response.headers.get_content_type().lower()
         if len(html) > MAX_HTML_BYTES:
@@ -160,12 +180,16 @@ def page_icon_candidates(url):
         for href in parser.manifest_links:
             manifest_url = urljoin(base_url, href)
             try:
-                manifest_data, _ = request_bytes(
+                manifest_data, manifest_response = request_bytes(
                     manifest_url,
-                    headers={"Accept": "application/manifest+json,application/json,*/*;q=0.5", "User-Agent": USER_AGENT},
+                    headers={
+                        "Accept": "application/manifest+json,application/json,*/*;q=0.5",
+                        "Accept-Encoding": "identity",
+                        "User-Agent": USER_AGENT,
+                    },
                     max_bytes=MAX_MANIFEST_BYTES,
                 )
-                manifest = json.loads(manifest_data.decode("utf-8"))
+                manifest = json.loads(decode_content(manifest_data, manifest_response).decode("utf-8"))
                 for icon in (manifest.get("icons", []) if isinstance(manifest, dict) else []):
                     if isinstance(icon, dict) and icon.get("src"):
                         candidates.append(urljoin(manifest_url, icon["src"]))
@@ -246,14 +270,17 @@ def download_icon(url):
                 continue
         return None
 
-    # 先尝试传统路径。即使首页被 WAF 拦截，favicon.ico 仍可能允许访问。
-    result = try_candidates(icon_candidates(url))
+    # 优先使用网页源码明确声明的图标，避免猜测错误的 favicon 路径。
+    page_candidates, final_url, page_error = page_icon_candidates(url)
+    result = try_candidates(page_candidates)
     if result:
         return result
 
-    page_candidates, final_url, page_error = page_icon_candidates(url)
-    final_candidates = icon_candidates(final_url) if final_url else []
-    result = try_candidates(final_candidates + page_candidates)
+    # 页面无法读取或未声明可用图标时，再尝试传统路径。
+    fallback_candidates = icon_candidates(url)
+    if final_url:
+        fallback_candidates.extend(icon_candidates(final_url))
+    result = try_candidates(fallback_candidates)
     if result:
         return result
 

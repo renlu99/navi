@@ -303,7 +303,102 @@
       let touchMoved = false;
       let touchStartX = 0;
       let touchStartY = 0;
+      let dragPointerId = 0;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
+      let dragPlaceholder = null;
+      let dragOriginalOrder = [];
       const clearLongPress = () => clearTimeout(longPressTimer);
+
+      function resetDraggedCardStyles() {
+        card.style.position = '';
+        card.style.left = '';
+        card.style.top = '';
+        card.style.width = '';
+        card.style.height = '';
+        card.style.zIndex = '';
+        card.style.pointerEvents = '';
+      }
+
+      function startTouchDrag(event) {
+        const rect = card.getBoundingClientRect();
+        dragPointerId = event.pointerId;
+        dragOffsetX = event.clientX - rect.left;
+        dragOffsetY = event.clientY - rect.top;
+        dragOriginalOrder = [...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => entry.dataset.id);
+        dragPlaceholder = document.createElement('article');
+        dragPlaceholder.className = 'shortcut drag-placeholder';
+        dragPlaceholder.setAttribute('aria-hidden', 'true');
+        dragPlaceholder.style.width = `${rect.width}px`;
+        dragPlaceholder.style.height = `${rect.height}px`;
+        card.before(dragPlaceholder);
+        document.body.append(card);
+        card.style.position = 'fixed';
+        card.style.left = `${rect.left}px`;
+        card.style.top = `${rect.top}px`;
+        card.style.width = `${rect.width}px`;
+        card.style.height = `${rect.height}px`;
+        card.style.zIndex = '30';
+        card.style.pointerEvents = 'none';
+      }
+
+      function moveTouchPlaceholder(event) {
+        const cards = [...grid.querySelectorAll('.shortcut[data-id]')];
+        if (!cards.length || !dragPlaceholder) return;
+        const measurements = cards.map((entry) => {
+          const rect = entry.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          return { entry, rect, centerX, centerY };
+        });
+        const rowCandidates = measurements.filter(({ rect }) => (
+          event.clientY >= rect.top - rect.height * 0.35
+          && event.clientY <= rect.bottom + rect.height * 0.35
+        ));
+        const candidates = rowCandidates.length ? rowCandidates : measurements;
+        const target = candidates.reduce((closest, current) => {
+          if (!closest) return current;
+          const currentDistance = (current.centerX - event.clientX) ** 2 + (current.centerY - event.clientY) ** 2;
+          const closestDistance = (closest.centerX - event.clientX) ** 2 + (closest.centerY - event.clientY) ** 2;
+          return currentDistance < closestDistance ? current : closest;
+        }, null);
+        if (!target) return;
+        const sameRow = Math.abs(event.clientY - target.centerY) <= target.rect.height * 0.7;
+        const insertAfter = sameRow
+          ? event.clientX > target.centerX
+          : event.clientY > target.centerY;
+        const reference = insertAfter ? target.entry.nextElementSibling : target.entry;
+        if (reference !== dragPlaceholder) grid.insertBefore(dragPlaceholder, reference);
+      }
+
+      function finishTouchDrag(saveOrder) {
+        if (!touchDragging) return;
+        touchDragging = false;
+        if (dragPointerId && card.hasPointerCapture?.(dragPointerId)) card.releasePointerCapture?.(dragPointerId);
+        if (saveOrder && touchMoved && dragPlaceholder) {
+          dragPlaceholder.replaceWith(card);
+          resetDraggedCardStyles();
+          const order = [...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => entry.dataset.id);
+          items = order.map((id) => items.find((item) => item.id === id)).filter(Boolean);
+          changed('顺序已保存');
+        } else {
+          dragPlaceholder?.remove();
+          grid.append(card);
+          const cardsById = new Map([...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => [entry.dataset.id, entry]));
+          dragOriginalOrder.forEach((id) => {
+            const entry = cardsById.get(id);
+            if (entry) grid.append(entry);
+          });
+          const addShortcut = grid.querySelector('.add-shortcut');
+          if (addShortcut) grid.append(addShortcut);
+          resetDraggedCardStyles();
+        }
+        dragPointerId = 0;
+        dragPlaceholder = null;
+        dragOriginalOrder = [];
+        moveModeId = '';
+        card.classList.remove('dragging', 'move-mode', 'show-actions');
+      }
 
       card.addEventListener('pointerdown', (event) => {
         if (event.pointerType !== 'touch') return;
@@ -317,6 +412,7 @@
           touchDragging = true;
           card.classList.add('dragging');
           card.setPointerCapture?.(event.pointerId);
+          startTouchDrag(event);
           return;
         }
         longPressTimer = setTimeout(() => {
@@ -333,33 +429,18 @@
           return;
         }
         event.preventDefault();
+        const distance = Math.hypot(event.clientX - touchStartX, event.clientY - touchStartY);
+        if (distance <= 8) return;
         touchMoved = true;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.shortcut[data-id]');
-        if (!target || target === card || target.parentElement !== grid) return;
-        const rect = target.getBoundingClientRect();
-        if (event.clientY > rect.top + rect.height / 2) grid.insertBefore(card, target.nextSibling);
-        else grid.insertBefore(card, target);
+        card.style.left = `${event.clientX - dragOffsetX}px`;
+        card.style.top = `${event.clientY - dragOffsetY}px`;
+        moveTouchPlaceholder(event);
       });
       card.addEventListener('pointerup', clearLongPress);
       card.addEventListener('pointercancel', clearLongPress);
       card.addEventListener('pointerleave', clearLongPress);
-      card.addEventListener('pointerup', () => {
-        if (!touchDragging) return;
-        touchDragging = false;
-        card.classList.remove('dragging');
-        if (touchMoved) {
-          const order = [...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => entry.dataset.id);
-          items = order.map((id) => items.find((item) => item.id === id)).filter(Boolean);
-          changed('顺序已保存');
-        }
-        moveModeId = '';
-        card.classList.remove('move-mode', 'show-actions');
-      });
-      card.addEventListener('pointercancel', () => {
-        touchDragging = false;
-        moveModeId = '';
-        card.classList.remove('dragging', 'move-mode', 'show-actions');
-      });
+      card.addEventListener('pointerup', () => finishTouchDrag(true));
+      card.addEventListener('pointercancel', () => finishTouchDrag(false));
       card.addEventListener('contextmenu', (event) => { event.preventDefault(); event.stopPropagation(); openCardMenu(card); });
       card.addEventListener('click', (event) => {
         if (longPressTriggered) {
