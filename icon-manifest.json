@@ -87,10 +87,6 @@
     "path": "icons/0db5ae7c-8d6c-4b49-8523-08e82b183259.png",
     "sourceHash": "a565f48444a4d5d3"
   },
-  "ea0b33c9-f32c-4b28-9af7-20e4aad93c2a": {
-    "path": "icons/ea0b33c9-f32c-4b28-9af7-20e4aad93c2a.ico",
-    "sourceHash": "f206c2ed31061c23"
-  },
   "8f55c369-4ecb-42ac-b9da-f41a24ce5b5f": {
     "path": "icons/8f55c369-4ecb-42ac-b9da-f41a24ce5b5f.ico",
     "sourceHash": "4a4e75ab5255c282"
@@ -98,5 +94,17 @@
   "e232b53f-a2db-4735-bea8-b03375ac03be": {
     "path": "icons/e232b53f-a2db-4735-bea8-b03375ac03be.ico",
     "sourceHash": "4a4e75ab5255c282"
+  },
+  "93a10de9-c300-48d2-86a2-ac63482b656d": {
+    "path": "icons/93a10de9-c300-48d2-86a2-ac63482b656d.png",
+    "sourceHash": "419c546c6811cce3"
+  },
+  "9f767cbc-9e3a-4dd5-80fd-1611bf47bee5": {
+    "path": "icons/9f767cbc-9e3a-4dd5-80fd-1611bf47bee5.svg",
+    "sourceHash": "a8606e97c2a9d6df"
+  },
+  "f9ec4804-5fc4-4ed1-b970-73ced3c3c65e": {
+    "path": "icons/f9ec4804-5fc4-4ed1-b970-73ced3c3c65e.png",
+    "sourceHash": "70fdb690f60cf0e3"
   }
 }
