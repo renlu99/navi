@@ -311,11 +311,6 @@
       let removeDragEndListeners = () => {};
       const clearLongPress = () => clearTimeout(longPressTimer);
 
-      function resetDraggedCardStyles() {
-        card.style.visibility = '';
-        card.style.pointerEvents = '';
-      }
-
       function startTouchDrag(event) {
         const rect = card.getBoundingClientRect();
         dragPointerId = event.pointerId;
@@ -323,8 +318,11 @@
         dragOffsetY = event.clientY - rect.top;
         dragOriginalOrder = [...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => entry.dataset.id);
         card.classList.add('drag-placeholder');
-        card.style.visibility = 'visible';
-        card.style.pointerEvents = 'none';
+        // 注意：不要在这里改 card 的 pointer-events / visibility。
+        // card 正持有指针捕获（setPointerCapture），部分移动端 WebView
+        // 对“捕获元素 + pointer-events:none”组合支持不完整，会导致后续
+        // pointermove/pointerup 事件丢失、拖拽卡住。占位视觉效果完全靠
+        // .drag-placeholder 的 CSS（隐藏子元素）即可实现，不需要改行内样式。
         dragGhost = card.cloneNode(true);
         dragGhost.classList.remove('drag-placeholder', 'move-mode');
         dragGhost.classList.add('drag-ghost');
@@ -335,13 +333,31 @@
         dragGhost.style.top = `${rect.top}px`;
         document.body.append(dragGhost);
         const pointerId = dragPointerId;
+        // 拖拽过程中的 move/up/cancel 统一挂在 window 上，而不是只依赖
+        // card 通过 setPointerCapture 收事件——这样即使某些移动端浏览器
+        // 的指针捕获实现不稳定，手指移动也不会“丢事件”导致卡片不跟手。
+        const dragStartX = event.clientX;
+        const dragStartY = event.clientY;
+        const handleDragMove = (moveEvent) => {
+          if (moveEvent.pointerId !== pointerId) return;
+          moveEvent.preventDefault();
+          if (Math.hypot(moveEvent.clientX - dragStartX, moveEvent.clientY - dragStartY) <= 8) return;
+          touchMoved = true;
+          if (dragGhost) {
+            dragGhost.style.left = `${moveEvent.clientX - dragOffsetX}px`;
+            dragGhost.style.top = `${moveEvent.clientY - dragOffsetY}px`;
+          }
+          moveTouchPlaceholder(moveEvent);
+        };
         const handleDragEnd = (endEvent) => {
           if (endEvent.pointerId !== pointerId) return;
           finishTouchDrag(endEvent.type === 'pointerup');
         };
+        window.addEventListener('pointermove', handleDragMove, { passive: false });
         window.addEventListener('pointerup', handleDragEnd, true);
         window.addEventListener('pointercancel', handleDragEnd, true);
         removeDragEndListeners = () => {
+          window.removeEventListener('pointermove', handleDragMove, { passive: false });
           window.removeEventListener('pointerup', handleDragEnd, true);
           window.removeEventListener('pointercancel', handleDragEnd, true);
         };
@@ -393,7 +409,6 @@
           dragGhost.remove();
           dragGhost = null;
           card.classList.remove('drag-placeholder');
-          resetDraggedCardStyles();
           changed('顺序已保存');
         } else {
           const cardsById = new Map([...grid.querySelectorAll('.shortcut[data-id]')].map((entry) => [entry.dataset.id, entry]));
@@ -406,7 +421,6 @@
           dragGhost?.remove();
           dragGhost = null;
           card.classList.remove('drag-placeholder');
-          resetDraggedCardStyles();
         }
         dragPointerId = 0;
         dragOriginalOrder = [];
@@ -437,20 +451,10 @@
         }, 550);
       });
       card.addEventListener('pointermove', (event) => {
-        if (event.pointerType !== 'touch') return;
-        if (!touchDragging) {
-          if (Math.hypot(event.clientX - touchStartX, event.clientY - touchStartY) > 8) clearLongPress();
-          return;
-        }
-        event.preventDefault();
-        const distance = Math.hypot(event.clientX - touchStartX, event.clientY - touchStartY);
-        if (distance <= 8) return;
-        touchMoved = true;
-        if (dragGhost) {
-          dragGhost.style.left = `${event.clientX - dragOffsetX}px`;
-          dragGhost.style.top = `${event.clientY - dragOffsetY}px`;
-        }
-        moveTouchPlaceholder(event);
+        // 拖拽开始后的移动统一由 startTouchDrag 里挂在 window 上的监听处理，
+        // 这里只负责：长按计时器还没触发时，手指移动幅度较大就取消长按菜单。
+        if (event.pointerType !== 'touch' || touchDragging) return;
+        if (Math.hypot(event.clientX - touchStartX, event.clientY - touchStartY) > 8) clearLongPress();
       });
       card.addEventListener('pointerup', clearLongPress);
       card.addEventListener('pointercancel', clearLongPress);
