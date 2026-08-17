@@ -352,27 +352,31 @@
         if (!cards.length || !dragGhost) return;
         const measurements = cards.map((entry) => {
           const rect = entry.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          return { entry, rect, centerX, centerY };
+          return { entry, rect, centerX: rect.left + rect.width / 2 };
         });
-        const rowCandidates = measurements.filter(({ rect }) => (
-          event.clientY >= rect.top - rect.height * 0.35
-          && event.clientY <= rect.bottom + rect.height * 0.35
-        ));
-        const candidates = rowCandidates.length ? rowCandidates : measurements;
-        const target = candidates.reduce((closest, current) => {
+        const rows = [];
+        measurements.forEach((measurement) => {
+          const previous = rows[rows.length - 1];
+          if (!previous || Math.abs(previous.top - measurement.rect.top) > 4) {
+            rows.push({ top: measurement.rect.top, bottom: measurement.rect.bottom, items: [measurement] });
+          } else {
+            previous.bottom = Math.max(previous.bottom, measurement.rect.bottom);
+            previous.items.push(measurement);
+          }
+        });
+        const row = rows.reduce((closest, current) => {
           if (!closest) return current;
-          const currentDistance = (current.centerX - event.clientX) ** 2 + (current.centerY - event.clientY) ** 2;
-          const closestDistance = (closest.centerX - event.clientX) ** 2 + (closest.centerY - event.clientY) ** 2;
+          const currentDistance = event.clientY < current.top
+            ? current.top - event.clientY
+            : event.clientY > current.bottom ? event.clientY - current.bottom : 0;
+          const closestDistance = event.clientY < closest.top
+            ? closest.top - event.clientY
+            : event.clientY > closest.bottom ? event.clientY - closest.bottom : 0;
           return currentDistance < closestDistance ? current : closest;
         }, null);
-        if (!target) return;
-        const sameRow = Math.abs(event.clientY - target.centerY) <= target.rect.height * 0.7;
-        const insertAfter = sameRow
-          ? event.clientX > target.centerX
-          : event.clientY > target.centerY;
-        const reference = insertAfter ? target.entry.nextElementSibling : target.entry;
+        if (!row) return;
+        const referenceItem = row.items.find((item) => event.clientX < item.centerX);
+        const reference = referenceItem?.entry || row.items[row.items.length - 1].entry.nextElementSibling;
         if (reference !== card) grid.insertBefore(card, reference);
       }
 
