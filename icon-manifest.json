@@ -114,5 +114,17 @@
   "fbf5cb8b-a679-4f04-91c1-e60d304d0963": {
     "path": "icons/fbf5cb8b-a679-4f04-91c1-e60d304d0963.png",
     "sourceHash": "a4b9b5e26ef76c68"
+  },
+  "6d599a2d-d444-4c5e-9458-d73550d552b2": {
+    "path": "icons/6d599a2d-d444-4c5e-9458-d73550d552b2.ico",
+    "sourceHash": "2f07e446132dce53"
+  },
+  "0c96b58c-3831-4ea8-a089-388f671b6d7e": {
+    "path": "icons/0c96b58c-3831-4ea8-a089-388f671b6d7e.ico",
+    "sourceHash": "69565be80a1df74b"
+  },
+  "9779878b-869e-48aa-9522-8eab728edea5": {
+    "path": "icons/9779878b-869e-48aa-9522-8eab728edea5.ico",
+    "sourceHash": "8aa82debae8f17bb"
   }
 }
