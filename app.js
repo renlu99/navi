@@ -484,7 +484,7 @@
 
   function cardTemplate(item) {
     return `<article class="shortcut" data-id="${escapeHtml(item.id)}" draggable="true">
-      <a class="shortcut-link" href="${escapeHtml(item.url)}">
+      <a class="shortcut-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">
         <span class="shortcut-icon">${iconMarkup(item)}</span>
         <div class="shortcut-name">${escapeHtml(item.title)}</div>
         <div class="shortcut-url">${escapeHtml(getDomain(item.url))}</div>
