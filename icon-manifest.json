@@ -166,5 +166,13 @@
   "1f6056b4-df42-41f0-ab77-5c8f29248f31": {
     "path": "icons/1f6056b4-df42-41f0-ab77-5c8f29248f31.svg",
     "sourceHash": "738d967c1b92ef03"
+  },
+  "52436fde-ba6c-4ba0-a023-6754b50ca9dd": {
+    "path": "icons/52436fde-ba6c-4ba0-a023-6754b50ca9dd.ico",
+    "sourceHash": "a36bbb3e13023d45"
+  },
+  "bb5d8f6b-8192-40b5-bc84-550ee21d6a7b": {
+    "path": "icons/bb5d8f6b-8192-40b5-bc84-550ee21d6a7b.ico",
+    "sourceHash": "58344db10bbc4696"
   }
 }
